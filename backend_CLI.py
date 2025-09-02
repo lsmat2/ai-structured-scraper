@@ -288,12 +288,27 @@ def post_new_places() -> None:
             type_of_data_option = input("\nOption (ns, ai, q): ").strip()
 
             if type_of_data_option == 'ns':
-                nearby_data_filepath = input("Enter nearby search cleaned data file path: ").strip()
-                post_nearbysearch_cleaned_data(nearby_data_filepath)
+                nearby_data_filepath = input("Enter nearby search cleaned data file path (or 'all' to specify all cleaned files in output directory: output_nearbySearch_cleaned/): ").strip()
+
+                if (nearby_data_filepath == 'all'):
+                    for root, dirs, files in os.walk("output_nearbySearch_cleaned/"):
+                        for filename in files:
+                            if filename.endswith(".json"): 
+                                post_nearbysearch_cleaned_data(os.path.join(root, filename))
+
+                else:
+                    post_nearbysearch_cleaned_data(nearby_data_filepath)
 
             elif type_of_data_option == 'ai':
-                ai_data_filepath = input("Enter AI cleaned data file path: ").strip()
-                post_ai_cleaned_data(ai_data_filepath)
+                ai_data_filepath = input("Enter AI cleaned data file path (or 'all' to specify all AI cleaned files in output directory: output_nearbySearch_ai_cleaned/): ").strip()
+
+                if (ai_data_filepath == 'all'):
+                    for root, dirs, files in os.walk("output_nearbySearch_ai_cleaned/"):
+                        for filename in files:
+                            if filename.endswith(".json"):
+                                post_ai_cleaned_data(os.path.join(root, filename))
+                else:
+                    post_ai_cleaned_data(ai_data_filepath)
 
             elif type_of_data_option == 'q':
                 print("Cancelling...")
