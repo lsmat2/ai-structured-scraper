@@ -52,6 +52,20 @@ def _update_place(place_id:int, place_data:dict) -> requests.Response:
     except Exception as e:
         print(f"\nError updating place data: {e}")
 
+def _create_place(place_data:dict) -> requests.Response:
+    """Create place data in the backend API."""
+    url = f"{BACKEND_API_URL}/api/places"
+
+    try:
+        response = requests.post(url, json=place_data, timeout=10)
+        return response
+    except requests.RequestException as e:
+        print(f"Error creating place data: {e}")
+    except json.JSONDecodeError as e:
+        print(f"Invalid JSON response: {e}")
+    except Exception as e:
+        print(f"\nError creating place data: {e}")
+
 def process_place_noninteractive(place_id: int, notFoundAction: str, internalServerErrorAction: str, successAction: str) -> None:
     """Process a single place by ID in non-interactive mode."""
 
@@ -123,6 +137,79 @@ def process_place_interactive(place_id:int) -> None:
     except Exception as e:
         print(f"An error occurred while processing place ID {place_id}: {e}")
 
+def process_existing_places() -> None:
+    """Process existing places in the database."""
+    try:
+        start_id = int(input("Enter start place ID: "))
+        end_id = int(input("Enter end place ID: "))
+        is_interactive = bool(input("Interactive? (y/n): ") == 'y')
+
+        if (is_interactive):
+            for id in range(start_id, end_id):
+                process_place_interactive(place_id=id)
+
+        else:
+            not_found_action = input("Action on 404 Not Found? (d=delete, s=skip, u=update): ").strip().lower()
+            while not_found_action not in ['d', 's', 'u']:
+                not_found_action = input("Invalid action. Please enter 'd', 's', or 'u': ").strip().lower()
+
+            internal_server_error_action = input("Action on 500 Internal Server Error? (d=delete, s=skip, u=update): ").strip().lower()
+            while internal_server_error_action not in ['d', 's', 'u']:
+                internal_server_error_action = input("Invalid action. Please enter 'd', 's', or 'u': ").strip().lower()
+
+            success_action = input("Action on 200 Success? (d=delete, s=skip, u=update): ").strip().lower()
+            while success_action not in ['d', 's', 'u']:
+                success_action = input("Invalid action. Please enter 'd', 's', or 'u': ").strip().lower()
+
+            for id in range(start_id, end_id):
+                process_place_noninteractive(place_id=id, notFoundAction=not_found_action, internalServerErrorAction=internal_server_error_action, successAction=success_action)
+    except KeyboardInterrupt:
+        raise KeyboardInterrupt
+    except Exception as e:
+        print(f"An error occurred while processing existing places: {e}")
+
+def post_nearbysearch_cleaned_data(filepath:str) -> None:
+    """Post cleaned nearby search data to the backend."""
+
+    try:
+
+        with open(filepath, "r", encoding="utf-8") as f:
+            data:dict = json.load(f)
+        
+        if not data: raise ValueError("No data found in file")
+
+        id = data.get("id")
+        if not id:
+            print(f"No existing id in local object, creating new place...")
+            response = _create_place(data)
+
+            if response.status_code == 201:
+                print(f"Successfully created new place\n({response.status_code}): {response.text}")
+                
+                if response.json().get("id") is not None: 
+                    
+                    data["id"] = response.json().get("id")
+
+                    with open(filepath, "w", encoding="utf-8") as f:
+                        json.dump(data, f, indent=2, ensure_ascii=False)
+                        print(f"Updated local file with new ID.")
+
+            else:
+                print(f"Failed to create place ({response.status_code}):{response.text}")
+        else:
+            print(f"Place ID {id} already exists, updating place...")
+            response = _update_place(id, data)
+
+            if response.status_code == 200:
+                print(f"Successfully updated place ID {id}\n({response.status_code}): {response.text}")
+            else:
+                print(f"Failed to update place ID {id}\n({response.status_code}): {response.text}")
+
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON from file {filepath}: {e}")
+    except Exception as e:
+        print(f"Error posting nearby search data: {e}")
+
 def post_ai_cleaned_data(ai_data_filepath:str) -> None:
     """Post AI cleaned place data from specified file."""
 
@@ -162,36 +249,34 @@ def post_ai_cleaned_data(ai_data_filepath:str) -> None:
     except Exception as e:
         print(f"\nError posting place data: {e}")
 
-def process_existing_places() -> None:
-    """Process existing places in the database."""
+def post_new_places() -> None:
+    """Process new places to be added to the database."""
     try:
-        start_id = int(input("Enter start place ID: "))
-        end_id = int(input("Enter end place ID: "))
-        is_interactive = bool(input("Interactive? (y/n): ") == 'y')
+        type_of_data_option = ''
+        print("\nSelect the type of data to add\n1) nearby search cleaned data \n2) AI cleaned data \n3) Cancel/Exit")
+        print(f"{'~' * 60}")
+        while type_of_data_option not in ['1', '2', '3']:
+            
+            type_of_data_option = input("\nOption (1, 2, 3): ").strip()
 
-        if (is_interactive):
-            for id in range(start_id, end_id):
-                process_place_interactive(place_id=id)
+            if type_of_data_option == '1':
+                nearby_data_filepath = input("Enter nearby search cleaned data file path: ").strip()
+                post_nearbysearch_cleaned_data(nearby_data_filepath)
+                
+            elif type_of_data_option == '2':
+                ai_data_filepath = input("Enter AI cleaned data file path: ").strip()
+                post_ai_cleaned_data(ai_data_filepath)
 
-        else:
-            not_found_action = input("Action on 404 Not Found? (d=delete, s=skip, u=update): ").strip().lower()
-            while not_found_action not in ['d', 's', 'u']:
-                not_found_action = input("Invalid action. Please enter 'd', 's', or 'u': ").strip().lower()
+            elif type_of_data_option == '3':
+                print("Cancelling...")
+                return
+            
+            type_of_data_option = ''
 
-            internal_server_error_action = input("Action on 500 Internal Server Error? (d=delete, s=skip, u=update): ").strip().lower()
-            while internal_server_error_action not in ['d', 's', 'u']:
-                internal_server_error_action = input("Invalid action. Please enter 'd', 's', or 'u': ").strip().lower()
-
-            success_action = input("Action on 200 Success? (d=delete, s=skip, u=update): ").strip().lower()
-            while success_action not in ['d', 's', 'u']:
-                success_action = input("Invalid action. Please enter 'd', 's', or 'u': ").strip().lower()
-
-            for id in range(start_id, end_id):
-                process_place_noninteractive(place_id=id, notFoundAction=not_found_action, internalServerErrorAction=internal_server_error_action, successAction=success_action)
     except KeyboardInterrupt:
         raise KeyboardInterrupt
     except Exception as e:
-        print(f"An error occurred while processing existing places: {e}")
+        print(f"An error occurred while processing new places: {e}")
 
 def main():
     """Main function to run the place data posting script."""
@@ -211,11 +296,10 @@ def main():
         if input_option == 1:
             process_existing_places()
         elif input_option == 2:
-            ai_data_filepath = input("Enter place data file path: ").strip()
-            post_ai_cleaned_data(ai_data_filepath)
-
+            post_new_places()
         else:
-            print("Invalid option selected.")
+            print("Invalid option selected, exiting...")
+            sys.exit(0)
 
     except KeyboardInterrupt:
         print("\nProcess interrupted by user. Shutting down gracefully.")
