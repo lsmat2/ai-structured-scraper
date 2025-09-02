@@ -27,8 +27,10 @@ A Python project for fetching, cleaning, and structuring place information from 
 git clone https://github.com/yourusername/ai-structured-scraper.git
 cd ai-structured-scraper
 
-# Install dependencies
-Create a venv
+# Install dependencies (recommended: create virtual environment first)
+python3 -m venv venv/
+source venv/bin/activate
+python -m pip install package-name
 
 # Configure environment variables
 cp .env.example .env
