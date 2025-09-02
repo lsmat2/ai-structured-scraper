@@ -48,8 +48,9 @@ def _format_place_data(place_data:Dict) -> Dict:
         missing_fields.append("latitude")
         missing_fields.append("longitude")
     else:
-        formatted_place_data["latitude"] = latitude
-        formatted_place_data["longitude"] = longitude
+
+        formatted_place_data["latitude"] = round(latitude, 6)
+        formatted_place_data["longitude"] = round(longitude, 6)
 
     # Types
     primaryType = place_data.get("primaryType")
@@ -175,7 +176,7 @@ def _save_nearby_places(places: List[Dict]) -> None:
         # Ensure place is operational before formatting/saving
         place_status: str = place_data.get("businessStatus")
         if place_status != "OPERATIONAL":
-            print(f"Skipping place {place_data.get('displayName', {}).get('text', '')}: ({place_status})")
+            print(f"Skipping place {place_data.get('displayName', {}).get('text', 'NO NAME FOUND')}: ({place_status})")
             continue
 
         formatted_place_data = _format_place_data(place_data=place_data)
