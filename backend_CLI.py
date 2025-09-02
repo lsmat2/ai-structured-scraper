@@ -252,22 +252,22 @@ def post_ai_cleaned_data(ai_data_filepath:str) -> None:
 def post_new_places() -> None:
     """Process new places to be added to the database."""
     try:
-        type_of_data_option = ''
-        print("\nSelect the type of data to add\n1) nearby search cleaned data \n2) AI cleaned data \n3) Cancel/Exit")
-        print(f"{'~' * 60}")
-        while type_of_data_option not in ['1', '2', '3']:
-            
-            type_of_data_option = input("\nOption (1, 2, 3): ").strip()
+        print(f"\nSelect the type of data to add\n'ns') nearby search cleaned data \n'ai') AI cleaned data \n'q') Cancel/Exit\n{'~' * 60}")
 
-            if type_of_data_option == '1':
+        type_of_data_option = ''
+        while type_of_data_option not in ['ns', 'ai', 'q']:
+
+            type_of_data_option = input("\nOption (ns, ai, q): ").strip()
+
+            if type_of_data_option == 'ns':
                 nearby_data_filepath = input("Enter nearby search cleaned data file path: ").strip()
                 post_nearbysearch_cleaned_data(nearby_data_filepath)
-                
-            elif type_of_data_option == '2':
+
+            elif type_of_data_option == 'ai':
                 ai_data_filepath = input("Enter AI cleaned data file path: ").strip()
                 post_ai_cleaned_data(ai_data_filepath)
 
-            elif type_of_data_option == '3':
+            elif type_of_data_option == 'q':
                 print("Cancelling...")
                 return
             
@@ -277,6 +277,7 @@ def post_new_places() -> None:
         raise KeyboardInterrupt
     except Exception as e:
         print(f"An error occurred while processing new places: {e}")
+
 
 def main():
     """Main function to run the place data posting script."""
@@ -289,22 +290,27 @@ def main():
 
     # Top level CLI interaction
     try:
-        print(f"Options:\n1) Interact with existing place data in backend\n2) Add new place data to backend\n{'~'*60}\n")
-        
-        input_option = int(input("Select an option(1-2): ").strip())
-        
-        if input_option == 1:
-            process_existing_places()
-        elif input_option == 2:
-            post_new_places()
-        else:
-            print("Invalid option selected, exiting...")
-            sys.exit(0)
+        print(f"Options:\n'pe') Process Existing, (interact with existing place data in backend)\n'pn') Post New, (add new place data to backend)\n'q') Quit\n{'~'*60}\n")
+
+        input_option = ''
+        while input_option not in ['pe', 'pn', 'q']:
+            input_option = input("Select an option('pe', 'pn', 'q'): ").strip()
+
+            if input_option == 'pe':
+                process_existing_places()
+
+            elif input_option == 'pn':
+                post_new_places()
+
+            elif input_option == 'q':
+                print("Exiting...")
+                sys.exit(0)
+
+            input_option = ''
 
     except KeyboardInterrupt:
         print("\nProcess interrupted by user. Shutting down gracefully.")
         sys.exit(0)
 
-    
 if __name__ == "__main__":
     main()
