@@ -24,7 +24,8 @@ class LLMCleaner:
         
         self.api_key = api_key
         self.client = OpenAI(api_key=api_key)
-        
+        self.OUTPUT_DIR = "output_nearbySearch_ai_cleaned"
+
         # Desired output schema from AI API
         self.schema_description = """
 Your job is to extract structured information from unstructured website text data.
@@ -178,13 +179,37 @@ type EventData = [
 
         return "\n".join(all_content)
 
-    def refine_text_data_with_openai(self, text: str) -> dict[str, str]:
+    def refine_text_data_with_openai(self, content: str) -> dict[str, str]:
+
+        # response = self.client.responses.create(
+        #     model="gpt-4o-mini",
+        #     instructions=self.schema_description,
+        #     input=content
+        # )
+
+        # print(f"Response type: {type(response)}")
+        # print(f"Response: {response}")
+        # if isinstance(response, dict):
+        #     output = response.get("output")
+        #     print(f"Output type: {type(output)}")
+        #     print(f"Output: {output}")
+            
+        #     usage = response.get("usage")
+        #     print(f"Usage type: {type(usage)}")
+        #     print(f"Usage: {usage}")
+        
         completion = self.client.chat.completions.create(
             model="gpt-4o-mini",
             store=True,
             messages=[
-                {"role": "system", "content": self.schema_description},
-                {"role": "user", "content": f"Extract Place info from this text:\n\n{text}"}
+                {
+                    "role": "system",
+                    "content": self.schema_description
+                },
+                {
+                    "role": "user",
+                    "content": content
+                }
             ]
         )
         
@@ -204,35 +229,47 @@ type EventData = [
 
         return info
 
-    def _write_to_output_file(self, content:str, filepath:str):
+    def _write_to_output_file(self, content:str, filename:str):
         """Write content to output file, with option to overwrite if file exists"""
+
+        os.makedirs(self.OUTPUT_DIR, exist_ok=True) # Create directory if it doesn't exist
+        full_path = os.path.join(self.OUTPUT_DIR, filename) # Full path to the output file
 
         try:
             data = json.loads(content)
         except json.JSONDecodeError:
             raise ValueError("Failed to parse content as JSON.")
-        
-        if os.path.exists(filepath) and (input(f"File {filepath} exists. Replace existing content? (y/n): ") == 'y'):
-            with open(filepath, "w", encoding="utf-8") as f:
+
+        if os.path.exists(full_path) and (input(f"File {filename} exists. Replace existing content? (y/n): ") == 'y'):
+            with open(full_path, "w", encoding="utf-8") as f:
                 f.write(json.dumps(data, ensure_ascii=False, indent=2)+"\n")
         else:
-            with open(filepath, "w", encoding="utf-8") as f:
+            with open(full_path, "w", encoding="utf-8") as f:
                 f.write(json.dumps(data, ensure_ascii=False, indent=2)+"\n")
 
-
-    def process_url(self, website_url:str, output_file:str, verbose:bool=False):
+    def process_url(self, place_data:dict, output_filename:str, verbose:bool=False):
         """Process a single URL and write results to output file"""
+        website_url = place_data.get("website")
+        if not website_url:
+            raise ValueError("No valid website URL found in place data.")
 
         # Recursive crawler to collect text data from base url and subpages
         content = self._collect_site_content(website_url, max_pages=10)
         if verbose: logger.info(f"[process_url]: Collected content length: {len(content)} characters from base url: {website_url}")
-        if (len(content) == 0): raise ValueError("No content collected")
+        if (len(content) == 0): 
+            raise ValueError("No content collected from base url")
 
-        # Refine the collected content using LLM (currently gpt-4o-mini) and save to file
+        # Refine the collected content using LLM (currently gpt-4o-mini)
         structured_data = self.refine_text_data_with_openai(content)
         if verbose: logger.info(f"\n------------\nTOKEN INFO\nPrompt: {structured_data['prompt_tokens']}\nCompletion: {structured_data['completion_tokens']}\nTotal: {structured_data['total_tokens']}")
-        self._write_to_output_file(structured_data["content"], output_file)
-        logger.info(f"[process_url]: Finished processing {website_url}, saved to {output_file}")
+
+        # Include id and coordinates into structured_data from place_data and save as json object
+        structured_data["content"]["id"] = place_data.get("id")
+        structured_data["content"]["latitude"] = place_data.get("latitude")
+        structured_data["content"]["longitude"] = place_data.get("longitude")
+        # TODO: Compare to existing place data
+        self._write_to_output_file(structured_data["content"], output_filename)
+        if verbose: logger.info(f"Finished processing {website_url}, saved as {output_filename}")
 
 
     def _get_ai_cleaned_filename(self, place_data_filepath:str) -> str:
@@ -250,22 +287,19 @@ type EventData = [
         
         place_data: dict = self._get_place_data(place_data_filepath)
 
-        if place_data == {}: raise ValueError("No place data to clean.")
-        
-        if (place_data.get("website") is not None) and (place_data.get("website") != ""):
+        new_filename = self._get_ai_cleaned_filename(place_data_filepath)
+        if verbose: logger.info(f"Processing place website: {place_data['website']} into {new_filename}")
 
-            new_filename = self._get_ai_cleaned_filename(place_data_filepath)
+        try:
+            self.process_url(place_data=place_data, output_filename=new_filename, verbose=verbose)
+        except Exception as e:
+            logger.error(f"Error occurred while processing place data: {e}")
 
-            if verbose: logger.info(f"Processing place website: {place_data['website']} into {new_filename}")
-
-            self.process_url(place_data["website"], output_file=new_filename, verbose=verbose)
-        
-        else: raise ValueError("No valid URL found in place data.")
 
 if __name__ == "__main__":
 
     if len(sys.argv) != 2:
-        print("Usage: python filename.py <filepath>")
+        print("Usage: python ai_data_cleaner.py <filepath_to_placedata>")
         sys.exit(1)
 
     filepath = sys.argv[1]
