@@ -66,6 +66,23 @@ def _create_place(place_data:dict) -> requests.Response:
     except Exception as e:
         print(f"\nError creating place data: {e}")
 
+
+def _create_promo(place_id: int, promo_data:dict) -> requests.Response:
+    """Create promo data in the backend API."""
+    url = f"{BACKEND_API_URL}/api/places/{place_id}/promotions"
+
+    try:
+        response = requests.post(url, json=promo_data, timeout=10)
+        return response
+    except requests.RequestException as e:
+        print(f"Error creating promo data: {e}")
+    except json.JSONDecodeError as e:
+        print(f"Invalid JSON response: {e}")
+    except Exception as e:
+        print(f"\nError creating promo data: {e}")
+
+    
+
 def process_place_noninteractive(place_id: int, notFoundAction: str, internalServerErrorAction: str, successAction: str) -> None:
     """Process a single place by ID in non-interactive mode."""
 
@@ -214,40 +231,51 @@ def post_ai_cleaned_data(ai_data_filepath:str) -> None:
     """Post AI cleaned place data from specified file."""
 
     try:
+
         with open(ai_data_filepath, "r", encoding="utf-8") as f:
             data:dict = json.load(f)
+        
+        if not data: 
+            raise ValueError(f"No data found in file {ai_data_filepath}")
+        
+        place_data = data.get("placeData")
+        if not place_data:
+            raise ValueError(f"Missing 'placeData' in file {ai_data_filepath}")
+        
+        place_id = place_data.get("id")
+        if not place_id:
+            raise ValueError(f"Missing 'id' in placeData of file {ai_data_filepath}")
+            
+        update_place_response: requests.Response = _update_place(place_id, place_data)
+        print(f"Successfully updated place ID {place_id}\n{'-'*60}\n({update_place_response.status_code}): {update_place_response.text}")
+
+        promotion_list = data.get("promoData", None)
+        if promotion_list is None:
+            print(f"No 'promoData' found in file {ai_data_filepath}")
+
+        else:
+            if not isinstance(promotion_list, list):
+                raise ValueError(f"'promoData' should be a list of dictionaries in file {ai_data_filepath}")
+
+            for promo_data in promotion_list:
+                if not isinstance(promo_data, dict):
+                    raise ValueError(f"Each item in 'promoData' should be a dictionary in file {ai_data_filepath}")
+
+                # Validate required fields in each promo dictionary
+                if "title" not in promo_data or "description" not in promo_data or "hours" not in promo_data:
+                    raise ValueError(f"Missing 'title', 'description' or 'hours' in promoData item in file {ai_data_filepath}")
+
+                # If all checks pass, create the promo
+                create_promo_response: requests.Response = _create_promo(place_id=place_id, promo_data=promo_data)
+                print(f"Successfully created promo {promo_data['title']}\n{'-'*60}\n({create_promo_response.status_code}): {create_promo_response.text}")
+        
+        print(f"Finished processing AI cleaned data from file {ai_data_filepath}")
+
+    except ValueError as e:
+        print(f"Value Error processing AI cleaned data: {e}")
     except Exception as e:
-        raise ValueError(f"Failed to read or parse file {ai_data_filepath}: {e}")
+        print(f"Unexpected error processing AI cleaned data: {e}")
 
-    if data.get("placeData") is None: raise ValueError(f"Missing 'placeData' in file {ai_data_filepath}")
-    place_data = data["placeData"]
-
-    if data.get("eventData") is not None:
-        event_data = data["eventData"]
-    
-    if data.get("promoData") is not None:
-        promo_data = data["promoData"]
-
-    if data.get("menuData") is not None:
-        menu_data = data["menuData"]
-
-    print(f"{'~' * 60}\nDisplaying formatted place data for: {place_data['name']}\n")
-    if event_data is not None: print(f"Event Data\n{'~' * 60}\n {event_data}")
-    if promo_data is not None: print(f"Promo Data\n{'~' * 60}\n {promo_data}")
-    if menu_data is not None: print(f"Menu Data\n{'~' * 60}\n {menu_data}")
-
-    # Manual approval to post place
-    if input("\nDo you want to update this place data? (y/n): ").lower() != 'y': return
-
-    try:
-        print("\nSending request...")
-
-        response = _update_place(place_id=data["id"], place_data=place_data)
-
-        print(f"Response ({response.status_code}) : {response.text}")
-
-    except Exception as e:
-        print(f"\nError posting place data: {e}")
 
 def post_new_places() -> None:
     """Process new places to be added to the database."""
