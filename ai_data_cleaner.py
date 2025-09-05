@@ -179,24 +179,16 @@ type EventData = [
 
         return "\n".join(all_content)
 
-    def refine_text_data_with_openai(self, content: str) -> dict[str, str]:
+    def refine_text_data_with_openai(self, scraped_website_content: str) -> dict[str]:
+        """Use OpenAI API to refine unstructured text data into structured format"""
 
+        #TODO: Switch to responses api
         # response = self.client.responses.create(
         #     model="gpt-4o-mini",
         #     instructions=self.schema_description,
         #     input=content
         # )
 
-        # print(f"Response type: {type(response)}")
-        # print(f"Response: {response}")
-        # if isinstance(response, dict):
-        #     output = response.get("output")
-        #     print(f"Output type: {type(output)}")
-        #     print(f"Output: {output}")
-            
-        #     usage = response.get("usage")
-        #     print(f"Usage type: {type(usage)}")
-        #     print(f"Usage: {usage}")
         
         completion = self.client.chat.completions.create(
             model="gpt-4o-mini",
@@ -208,26 +200,34 @@ type EventData = [
                 },
                 {
                     "role": "user",
-                    "content": content
+                    "content": scraped_website_content
                 }
-            ]
+            ],
+            response_format={"type": "json_object"}  # Request JSON object response
         )
         
-        # Refine the content from the completion
+        # Refine the content from the completion (auto extract JSON object if extra text present)
         content = completion.choices[0].message.content
+        print(f"\n\nRaw Content Returned from AI:\n\n{content}\n")
+        # Attempt to extract JSON object from content
         start = content.find('{')
         end = content.rfind('}')
         if start != -1 and end != -1 and start < end:
             content = content[start:end+1]
+            content = json.loads(content)
+        else:
+            raise ValueError("Could not find JSON object in the response content.")
+        
+        print(f"Content after json.loads():\n\n{content}\n")
         
         # Store the refined content and token usage information
-        info = {}
-        info["content"] = content
-        info["prompt_tokens"] = completion.usage.prompt_tokens
-        info["completion_tokens"] = completion.usage.completion_tokens
-        info["total_tokens"] = completion.usage.total_tokens
+        llm_output = {}
+        llm_output["content"] = content
+        llm_output["prompt_tokens"] = completion.usage.prompt_tokens
+        llm_output["completion_tokens"] = completion.usage.completion_tokens
+        llm_output["total_tokens"] = completion.usage.total_tokens
 
-        return info
+        return llm_output
 
     def _write_to_output_file(self, content:str, filename:str):
         """Write content to output file, with option to overwrite if file exists"""
@@ -254,21 +254,24 @@ type EventData = [
             raise ValueError("No valid website URL found in place data.")
 
         # Recursive crawler to collect text data from base url and subpages
-        content = self._collect_site_content(website_url, max_pages=10)
-        if verbose: logger.info(f"[process_url]: Collected content length: {len(content)} characters from base url: {website_url}")
-        if (len(content) == 0): 
+        scraped_website_content:str = self._collect_site_content(root_url=website_url, max_pages=10)
+        if verbose: logger.info(f"[process_url]: Collected content length: {len(scraped_website_content)} characters from base url: {website_url}")
+        if (len(scraped_website_content) == 0): 
             raise ValueError("No content collected from base url")
 
         # Refine the collected content using LLM (currently gpt-4o-mini)
-        structured_data = self.refine_text_data_with_openai(content)
-        if verbose: logger.info(f"\n------------\nTOKEN INFO\nPrompt: {structured_data['prompt_tokens']}\nCompletion: {structured_data['completion_tokens']}\nTotal: {structured_data['total_tokens']}")
+        llm_output = self.refine_text_data_with_openai(scraped_website_content=scraped_website_content)
+        if verbose: logger.info(f"\n------------\nTOKEN INFO\nPrompt: {llm_output.get('prompt_tokens', 'ERR')}\nCompletion: {llm_output.get('completion_tokens', 'ERR')}\nTotal: {llm_output.get('total_tokens', 'ERR')}\n------------\n")
 
         # Include id and coordinates into structured_data from place_data and save as json object
-        structured_data["content"]["id"] = place_data.get("id")
-        structured_data["content"]["latitude"] = place_data.get("latitude")
-        structured_data["content"]["longitude"] = place_data.get("longitude")
+        structured_place_data = llm_output["content"]
+        print(f"\n\nType of content returned from 'completion.choices[0].message.content' (AI output): {type(structured_place_data)}\n")
+        print(f"Place Data Collected from AI:\n\n{structured_place_data}\n")
+        structured_place_data["id"] = place_data.get("id")
+        structured_place_data["latitude"] = place_data.get("latitude")
+        structured_place_data["longitude"] = place_data.get("longitude")
         # TODO: Compare to existing place data
-        self._write_to_output_file(structured_data["content"], output_filename)
+        self._write_to_output_file(structured_place_data, output_filename)
         if verbose: logger.info(f"Finished processing {website_url}, saved as {output_filename}")
 
 
