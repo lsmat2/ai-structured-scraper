@@ -192,10 +192,10 @@ def post_nearbysearch_cleaned_data(filepath:str) -> None:
 
         with open(filepath, "r", encoding="utf-8") as f:
             data:dict = json.load(f)
+            if not data: 
+                raise ValueError("No data found in file")
         
-        if not data: raise ValueError("No data found in file")
-
-        id = data.get("id")
+        id:str = data.pop("id", None)  # Remove and get the 'id' key if it exists
         if not id:
             print(f"No existing id in local object, creating new place...")
             response = _create_place(data)
@@ -215,6 +215,9 @@ def post_nearbysearch_cleaned_data(filepath:str) -> None:
                 print(f"Failed to create place ({response.status_code}):{response.text}")
         else:
             print(f"Place ID {id} already exists, updating place...")
+
+            
+            
             response = _update_place(id, data)
 
             if response.status_code == 200:

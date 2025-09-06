@@ -52,13 +52,22 @@ def _format_place_data(place_data:Dict) -> Dict:
         formatted_place_data["latitude"] = round(latitude, 6)
         formatted_place_data["longitude"] = round(longitude, 6)
 
+    ###############################################
+    ######### Not always present types ############
+    ###############################################
+
     # Types
-    primaryType = place_data.get("primaryType")
-    if primaryType is None: missing_fields.append("primaryType")
-    else: formatted_place_data["primaryType"] = primaryType
-    types: List[str] = place_data.get("types")
-    if types is None or len(types) == 0: missing_fields.append("types")
-    else: formatted_place_data["types"] = [t for t in types if t not in ["point_of_interest", "establishment"]]
+    primary_type = place_data.get("primaryType")
+    if primary_type is None: missing_fields.append("primary_type")
+    else: formatted_place_data["primary_type"] = primary_type
+    secondary_types: List[str] = place_data.get("types")
+    if secondary_types is None or len(secondary_types) == 0: missing_fields.append("secondary_types")
+    else: formatted_place_data["secondary_types"] = [t for t in secondary_types if t not in ["point_of_interest", "establishment"]]
+
+    # Rating
+    rating = place_data.get("rating")
+    if rating is None: missing_fields.append("rating")
+    else: formatted_place_data["rating"] = rating
 
     # Address
     postalAddress: Dict = place_data.get("postalAddress")
