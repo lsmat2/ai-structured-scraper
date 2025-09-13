@@ -8,13 +8,14 @@ import logging
 from openai import OpenAI
 from dotenv import load_dotenv
 
+from ai_schema_config import PlaceDataExtraction
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
 
 class LLMCleaner:
     def __init__(self, api_key=None):
@@ -27,84 +28,62 @@ class LLMCleaner:
         self.OUTPUT_DIR = "output_nearbySearch_ai_cleaned"
 
         # Desired output schema from AI API
-        self.schema_description = """
-Your job is to extract structured information from unstructured website text data.
-Primarily, you should focus on identifying key details such including
-business hours, contact information, descriptions, events and promotions.
+        self.schema_description = """You are an expert at structured data extraction. You will be given unstructured
+text from a business's website and should convert it into the provided schema.
 
-For each unstructured text, a PlaceData object should be created. Additionally, if any 
-information is available about the place's menu items, events, or promotions, the 
-corresponding MenuData, EventData, or PromoData objects should be created for them.
+Focus on identifying business hours, contact information, descriptions, events,
+promotions, menu items, amenities, cuisines, and secondary types.
 
-Each day of the week should have it's own data for regular open hours or promotions.
-Don't represent multiple promotions across different days as a single entry.
-
-If deciding between categorizing something as an event or a promotion, events should be
-one time or one-off occurrences, while promotions should be for ongoing or recurring occurrences.
-
-One exception for daily hours is that if they have no time listed for a promotion or event and you conclude
-the duration is for the entire day, set the open hour to 0 and close hour to 0 to represent that.
-
-
-DailyHours = {
-    day: "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday" | "Sunday"; 
-    open_hour: number; // 0-23 instead
-    open_minute?: number; // Optional, for half-hour increments
+#### Hours
+Represent hours using integers for time fields:
+daily_hours = {
+    day: "Monday" | "Tuesday" | "Wednesday" | "Thursday" |
+         "Friday" | "Saturday" | "Sunday";
+    open_hour: number; // 0-23
+    open_minute?: number; // 0-59
     close_hour: number; // 0-23
-    close_minute?: number; // Optional, for half-hour increments
+    close_minute?: number; // 0-59
 }
 
-type PlaceData = {
-    name: string;
-    street: string;
-    city: string;
-    state_code: string;
-    zip: number;
-    latitude: number;
-    longitude: number;
-    hours?: DailyHours[];
-    amenity?: string; (e.g. "pool table", "patio", "darts", "board games")
-    cuisine?: string[]; (e.g. "burger", "italian", "sushi")
-    price_level?: string;
-    rating?: number; (1-5)
-    description?: string;
-    phone?: string;
-    email?: string;
-    website?: string;
-    profile_image_url?: string;
-    image_urls?: string[];
-    primary_type?: string; (e.g. "restaurant", "bar", "cafe", "pub", "night club")
-    secondary_types?: string[];
-};
+If a business is open 24 hours, set both open_hour and close_hour to 0.
 
-type PromoData = [
+#### Promotions
+promotion_data = [
 {
     title: string;
     description?: string;
-    hours?: DailyHours[];
+    hours?: daily_hours[];
 }, ...
-];
+]
 
-type MenuData = [
+#### Events
+event_data = [
+{
+    title: string;
+    description?: string;
+    start_date: string;
+    end_date: string;
+    hours?: daily_hours[];
+}, ...
+]
+
+#### Menu Items
+menu_data = [
 {
     name: string;
     description?: string;
     price: number;
     category: string;
 }, ...
-];
+]
 
-type EventData = [
-{
-    title: string;
-    description?: string;
-    startDate: string;
-    endDate: string;
-    eventType: string;
-    hours?: DailyHours[];
-}, ...
-];
-"""
+#### Notes
+- Each promotion, event, and menu item should be a distinct entry.
+- Events are one-time or date-bound, while promotions are recurring or ongoing.
+- If an item spans an entire day and no specific times are given, use open_hour = 0 and close_hour = 0.
+- Do not invent fields not defined in the schema. Only use the properties described above.
+- If certain information is not available, omit that field or set it to null.
+- Ensure the final output is valid JSON and adheres to the schema."""
 
     def _get_place_data(self, place_data_filepath: str) -> dict:
         """Load place data from a JSON file."""
@@ -179,55 +158,43 @@ type EventData = [
 
         return "\n".join(all_content)
 
-    def refine_text_data_with_openai(self, scraped_website_content: str) -> dict[str]:
+    def call_openai_api(self, scraped_website_content: str) -> dict[str]:
         """Use OpenAI API to refine unstructured text data into structured format"""
 
-        #TODO: Switch to responses api
-        # response = self.client.responses.create(
-        #     model="gpt-4o-mini",
-        #     instructions=self.schema_description,
-        #     input=content
-        # )
+        logger.info("Refining text data with OpenAI API...")
 
-        
-        completion = self.client.chat.completions.create(
-            model="gpt-4o-mini",
-            store=True,
-            messages=[
-                {
-                    "role": "system",
-                    "content": self.schema_description
-                },
-                {
-                    "role": "user",
-                    "content": scraped_website_content
-                }
-            ],
-            response_format={"type": "json_object"}  # Request JSON object response
-        )
-        
-        # Refine the content from the completion (auto extract JSON object if extra text present)
-        content = completion.choices[0].message.content
-        print(f"\n\nRaw Content Returned from AI:\n\n{content}\n")
-        # Attempt to extract JSON object from content
-        start = content.find('{')
-        end = content.rfind('}')
-        if start != -1 and end != -1 and start < end:
-            content = content[start:end+1]
-            content = json.loads(content)
-        else:
-            raise ValueError("Could not find JSON object in the response content.")
-        
-        print(f"Content after json.loads():\n\n{content}\n")
-        
-        # Store the refined content and token usage information
-        llm_output = {}
-        llm_output["content"] = content
-        llm_output["prompt_tokens"] = completion.usage.prompt_tokens
-        llm_output["completion_tokens"] = completion.usage.completion_tokens
-        llm_output["total_tokens"] = completion.usage.total_tokens
+        try:
+            response = self.client.responses.parse(
+                model="gpt-4o-mini",
+                input=[
+                    {"role": "system", "content": self.schema_description},
+                    {"role": "user", "content": scraped_website_content}
+                ],
+                text_format=PlaceDataExtraction
+            )
+        except Exception as e:
+            logger.error(f"Error calling OpenAI API: {e}")
+            raise
 
-        return llm_output
+        # # The parsed object is directly available here
+        # place: PlaceDataExtraction = response.output[0]
+        # logger.info(f"Refined data: {place.model_dump_json(indent=2)}")
+
+        # # Token usage (new field names)
+        # input_tokens = response.usage.input_tokens
+        # output_tokens = response.usage.output_tokens
+        # total_tokens = response.usage.total_tokens
+
+        # # Store the refined content and token usage information
+        # llm_output = {
+        #     "content": place,
+        #     "input_tokens": input_tokens,
+        #     "output_tokens": output_tokens,
+        #     "total_tokens": total_tokens,
+        # }
+
+        return response
+
 
     def _write_to_output_file(self, content:str, filename:str):
         """Write content to output file, with option to overwrite if file exists"""
@@ -260,19 +227,26 @@ type EventData = [
             raise ValueError("No content collected from base url")
 
         # Refine the collected content using LLM (currently gpt-4o-mini)
-        llm_output = self.refine_text_data_with_openai(scraped_website_content=scraped_website_content)
-        if verbose: logger.info(f"\n------------\nTOKEN INFO\nPrompt: {llm_output.get('prompt_tokens', 'ERR')}\nCompletion: {llm_output.get('completion_tokens', 'ERR')}\nTotal: {llm_output.get('total_tokens', 'ERR')}\n------------\n")
+        openai_output = self.call_openai_api(scraped_website_content=scraped_website_content)
+        print(f"\nType of content returned from openai api: {type(openai_output)}\n")
+        print(f"OpenAI Output:\n\n{openai_output}\n")
 
-        # Include id and coordinates into structured_data from place_data and save as json object
-        structured_place_data = llm_output["content"]
-        print(f"\n\nType of content returned from 'completion.choices[0].message.content' (AI output): {type(structured_place_data)}\n")
-        print(f"Place Data Collected from AI:\n\n{structured_place_data}\n")
-        structured_place_data["id"] = place_data.get("id")
-        structured_place_data["latitude"] = place_data.get("latitude")
-        structured_place_data["longitude"] = place_data.get("longitude")
-        # TODO: Compare to existing place data
-        self._write_to_output_file(structured_place_data, output_filename)
-        if verbose: logger.info(f"Finished processing {website_url}, saved as {output_filename}")
+
+
+
+
+        # if verbose: logger.info(f"\n------------\nTOKEN INFO\nPrompt: {llm_output.get('prompt_tokens', 'ERR')}\nCompletion: {llm_output.get('completion_tokens', 'ERR')}\nTotal: {llm_output.get('total_tokens', 'ERR')}\n------------\n")
+
+        # # Include id and coordinates into structured_data from place_data and save as json object
+        # structured_place_data = llm_output["content"]
+        # print(f"\n\nType of content returned from 'completion.choices[0].message.content' (AI output): {type(structured_place_data)}\n")
+        # print(f"Place Data Collected from AI:\n\n{structured_place_data}\n")
+        # structured_place_data["id"] = place_data.get("id")
+        # structured_place_data["latitude"] = place_data.get("latitude")
+        # structured_place_data["longitude"] = place_data.get("longitude")
+        # # TODO: Compare to existing place data
+        # self._write_to_output_file(structured_place_data, output_filename)
+        # if verbose: logger.info(f"Finished processing {website_url}, saved as {output_filename}")
 
 
     def _get_ai_cleaned_filename(self, place_data_filepath:str) -> str:
