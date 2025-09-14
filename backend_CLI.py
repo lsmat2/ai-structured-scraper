@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 
 # IMPROVEMENTS: 
 # - Include datetime in object to determine time since last request
+# - Add retry logic with exponential backoff for failed requests
+# - Add logging to file with timestamps
 
 load_dotenv()
 BACKEND_API_URL = os.getenv("BACKEND_API_URL")
