@@ -8,7 +8,7 @@ import logging
 from dotenv import load_dotenv
 
 from openai import OpenAI
-from openai.types.responses import ParsedResponse, ParsedResponseOutputMessage, ParsedResponseOutputText
+from openai.types.responses import ResponseUsage, ParsedResponse, ParsedResponseOutputMessage, ParsedResponseOutputText
 
 from typing import cast
 
@@ -196,6 +196,12 @@ menu_data = [
         #     "output_tokens": output_tokens,
         #     "total_tokens": total_tokens,
         # }
+
+        usage_info: ResponseUsage = response.usage
+        input_tokens = usage_info.input_tokens
+        output_tokens = usage_info.output_tokens
+        total_tokens = usage_info.total_tokens
+        print(f"\nToken usage - Input: {input_tokens}, Output: {output_tokens}, Total: {total_tokens}\n")
 
         response_message: ParsedResponseOutputMessage[PlaceDataExtraction] = response.output[0]
         # print(f"\nResponse message (response.output[0]): {response_message}\n")
