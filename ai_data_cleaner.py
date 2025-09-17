@@ -5,8 +5,12 @@ import json
 import sys
 import os
 import logging
-from openai import OpenAI
 from dotenv import load_dotenv
+
+from openai import OpenAI
+from openai.types.responses import ParsedResponse, ParsedResponseOutputMessage, ParsedResponseOutputText
+
+from typing import cast
 
 from ai_schema_config import PlaceDataExtraction
 
@@ -164,7 +168,7 @@ menu_data = [
         logger.info("Refining text data with OpenAI API...")
 
         try:
-            response = self.client.responses.parse(
+            response: ParsedResponse[PlaceDataExtraction] = self.client.responses.parse(
                 model="gpt-4o-mini",
                 input=[
                     {"role": "system", "content": self.schema_description},
@@ -193,7 +197,18 @@ menu_data = [
         #     "total_tokens": total_tokens,
         # }
 
-        return response
+        response_message: ParsedResponseOutputMessage[PlaceDataExtraction] = response.output[0]
+        # print(f"\nResponse message (response.output[0]): {response_message}\n")
+
+        response_content: ParsedResponseOutputText[PlaceDataExtraction] = cast(
+            ParsedResponseOutputText[PlaceDataExtraction], response_message.content[0]
+        )
+        # print(f"\nResponse content (response.output[0].content[0]): {response_content}\n")
+
+        response_parsed: PlaceDataExtraction = response_content.parsed
+        # print(f"\nResponse parsed (response.output[0].content[0].parsed): {response_parsed}\n")
+
+        return response_parsed
 
 
     def _write_to_output_file(self, content:str, filename:str):
@@ -226,27 +241,21 @@ menu_data = [
         if (len(scraped_website_content) == 0): 
             raise ValueError("No content collected from base url")
 
-        # Refine the collected content using LLM (currently gpt-4o-mini)
-        openai_output = self.call_openai_api(scraped_website_content=scraped_website_content)
-        print(f"\nType of content returned from openai api: {type(openai_output)}\n")
-        print(f"OpenAI Output:\n\n{openai_output}\n")
+        # Refine the collected content using LLM (currently gpt-4o-mini) and turn into python dict
+        openai_output: PlaceDataExtraction = self.call_openai_api(scraped_website_content=scraped_website_content)
+        structured_place_data_dict = openai_output.model_dump()
 
-
-
-
+        # Include id and coordinates into structured_data from place_data and save as json object
+        structured_place_data_dict["id"] = place_data.get("id")
+        structured_place_data_dict["latitude"] = place_data.get("latitude")
+        structured_place_data_dict["longitude"] = place_data.get("longitude")
+        structured_place_data_json = json.dumps(structured_place_data_dict, ensure_ascii=False, indent=2)
 
         # if verbose: logger.info(f"\n------------\nTOKEN INFO\nPrompt: {llm_output.get('prompt_tokens', 'ERR')}\nCompletion: {llm_output.get('completion_tokens', 'ERR')}\nTotal: {llm_output.get('total_tokens', 'ERR')}\n------------\n")
-
-        # # Include id and coordinates into structured_data from place_data and save as json object
-        # structured_place_data = llm_output["content"]
-        # print(f"\n\nType of content returned from 'completion.choices[0].message.content' (AI output): {type(structured_place_data)}\n")
-        # print(f"Place Data Collected from AI:\n\n{structured_place_data}\n")
-        # structured_place_data["id"] = place_data.get("id")
-        # structured_place_data["latitude"] = place_data.get("latitude")
-        # structured_place_data["longitude"] = place_data.get("longitude")
-        # # TODO: Compare to existing place data
-        # self._write_to_output_file(structured_place_data, output_filename)
-        # if verbose: logger.info(f"Finished processing {website_url}, saved as {output_filename}")
+        # TODO: Store/track/log token usage info
+        # TODO: Compare to existing place data
+        self._write_to_output_file(structured_place_data_json, output_filename)
+        if verbose: logger.info(f"Finished processing {website_url}, saved as {output_filename}")
 
 
     def _get_ai_cleaned_filename(self, place_data_filepath:str) -> str:
