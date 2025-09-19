@@ -5,12 +5,15 @@ import json
 import sys
 import os
 import logging
+import time
+
 from dotenv import load_dotenv
 
 from openai import OpenAI
 from openai.types.responses import ResponseUsage, ParsedResponse, ParsedResponseOutputMessage, ParsedResponseOutputText
 
 from typing import cast
+from geopy.geocoders import Nominatim
 
 from ai_schema_config import PlaceDataExtraction, SCHEMA_DESCRIPTION
 
@@ -205,6 +208,14 @@ class LLMCleaner:
         # if verbose: logger.info(f"\n------------\nTOKEN INFO\nPrompt: {llm_output.get('prompt_tokens', 'ERR')}\nCompletion: {llm_output.get('completion_tokens', 'ERR')}\nTotal: {llm_output.get('total_tokens', 'ERR')}\n------------\n")
         # TODO: Store/track/log token usage info
         # TODO: Compare to existing place data
+
+        # TODO: Further separate output by state
+        geolocator = Nominatim(user_agent='geoapi')
+        location = geolocator.reverse((place_data.get("latitude"), place_data.get("longitude")), exactly_one=True)
+        if location and 'address' in location.raw and 'state' in location.raw['address']:
+            state_str = location.raw['address']['state']
+            # state_dir = os.path.join(self.OUTPUT_DIR, state.replace(" ", "_"))
+
         self._write_to_output_file(structured_place_data_json, output_filename)
         if verbose: logger.info(f"Finished processing {website_url}, saved as {output_filename}")
 
@@ -232,20 +243,43 @@ class LLMCleaner:
         except Exception as e:
             logger.error(f"Error occurred while processing place data: {e}")
 
+def test_geocoder(latitude:float, longitude:float):
+    geolocator = Nominatim(user_agent='leo_test_geocoder')
+    location = geolocator.reverse((latitude, longitude), exactly_one=True)
+    if location and 'address' in location.raw and 'state' in location.raw['address']:
+        state = location.raw['address']['state']
+        print(f"State: {state}")
+    else:
+        print("State information not found.")
 
 if __name__ == "__main__":
 
-    if len(sys.argv) != 2:
-        print("Usage: python ai_data_cleaner.py <filepath_to_placedata>")
-        sys.exit(1)
+    # if len(sys.argv) != 2:
+    #     print("Usage: python ai_data_cleaner.py <filepath_to_placedata>")
+    #     sys.exit(1)
 
-    filepath = sys.argv[1]
+    # filepath = sys.argv[1]
+    print ("Test: Illinois")
+    latitude, longitude = 41.931444,-87.648686
+    test_geocoder(latitude, longitude)
 
-    try:
-        cleaner = LLMCleaner()
-        cleaner.clean_place_data(filepath, verbose=True)
-    except Exception as e:
-        logger.error(f"Error occurred while cleaning place data: {e}")
+    time.sleep(2)
+    
+    print ("Test: Florida")
+    latitude, longitude = 27.940532,-82.483181
+    test_geocoder(latitude, longitude)
+
+    time.sleep(2)
+    
+    print ("Test: Idaho")
+    latitude, longitude = 45.503,114.449
+    test_geocoder(latitude, longitude)
+
+    # try:
+    #     cleaner = LLMCleaner()
+    #     cleaner.clean_place_data(filepath, verbose=True)
+    # except Exception as e:
+    #     logger.error(f"Error occurred while cleaning place data: {e}")
 
     # test_urls = [
     #     "https://www.kellyspub.com/",
