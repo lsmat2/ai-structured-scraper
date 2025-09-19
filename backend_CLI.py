@@ -4,6 +4,8 @@ import json
 import sys
 from dotenv import load_dotenv
 
+from clean_nearby_places import process_places
+
 # IMPROVEMENTS: 
 # - Include datetime in object to determine time since last request
 # - Add retry logic with exponential backoff for failed requests
@@ -12,7 +14,7 @@ from dotenv import load_dotenv
 load_dotenv()
 BACKEND_API_URL = os.getenv("BACKEND_API_URL")
 
-def _get_place_by_id(place_id:int) -> requests.Response:
+def _get_place_response_by_id(place_id:int) -> requests.Response:
     """Fetch place data from backend."""
     url = f"{BACKEND_API_URL}/api/places/{place_id}"
 
@@ -26,7 +28,7 @@ def _get_place_by_id(place_id:int) -> requests.Response:
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
 
-def _get_place_id_from_bounds(latitude:float, longitude:float, box_distance:float=10.0) -> str | None:
+def _get_place_id_from_bounds(name: str, latitude:float, longitude:float, box_distance:float=10.0) -> str | None:
     """Fetch place data from backend by geographic bounds."""
     # Params should be structured:    ?bounds=SWlat,SWlng,NElat,NElng
     SWlat:int = latitude - box_distance
@@ -52,7 +54,9 @@ def _get_place_id_from_bounds(latitude:float, longitude:float, box_distance:floa
     places_list: list[dict] = response.json()
     for place in places_list:
         if place.get("latitude") == latitude and place.get("longitude") == longitude:
-            return place.get("id")
+            return place.get("id", None)
+        elif place.get("name", "").lower() == name.lower():
+            return place.get("id", None)
 
     return None
 
@@ -153,7 +157,7 @@ def _process_place_interactive(place_id:int) -> None:
     """Main function to process a single place by ID."""
     
     try:
-        place_response = _get_place_by_id(place_id)
+        place_response = _get_place_response_by_id(place_id)
         status_code = place_response.status_code
        
         if status_code == 404:
@@ -236,6 +240,7 @@ def _post_nearbysearch_cleaned_data(filepath:str) -> None:
     id_local = place_data.pop("id", None)
 
     id_backend: str | None = _get_place_id_from_bounds(
+        name=place_data.get("name"),
         latitude=place_data.get("latitude"), 
         longitude=place_data.get("longitude")
     )
@@ -321,6 +326,25 @@ def _post_ai_cleaned_data(ai_data_filepath:str) -> None:
     except Exception as e:
         print(f"Unexpected error processing AI cleaned data: {e}")
 
+def process_nearbysearch_data() ->  None:
+    """Process nearby search cleaned data to be added to the database."""
+    try:
+        nearby_data_filepath = input("Enter nearby search cleaned data file path (or 'all' to specify all cleaned files in output directory: output_nearbySearch/): ").strip()
+
+        if (nearby_data_filepath == 'all'):
+            for root, dirs, files in os.walk("output_nearbySearch/"):
+                for filename in files:
+                    if filename.endswith(".json"): 
+                        process_places(os.path.join(root, filename))
+
+        else:
+            process_places(nearby_data_filepath)
+
+    except KeyboardInterrupt:
+        raise KeyboardInterrupt
+    except Exception as e:
+        print(f"An error occurred while processing nearby search data: {e}")
+
 def post_new_places() -> None:
     """Process new places to be added to the database."""
     try:
@@ -372,21 +396,28 @@ def main():
         print("Usage: python backend_CLI.py")
         sys.exit(1)
 
-    print(f"Welcome to the Place Data Management CLI!\n{'~'*60}")
+    print(f"Welcome to the Place Data CLI!\n{'~'*60}")
 
     # Top level CLI interaction
     try:
-        print(f"Options:\n'pe') Process Existing, (interact with existing place data in backend)\n'pn') Post New, (add new place data to backend)\n'q') Quit\n{'~'*60}\n")
+        print(f"""Options:
+              'pe') Process Existing, (interact with existing place data in backend)
+              'pn') Post New, (add new place data to backend)
+              'pns') Process Nearby Search, (interact with local nearby search data)
+              'q') Quit\n\n{'~'*60}\n""")
 
         input_option = ''
-        while input_option not in ['pe', 'pn', 'q']:
-            input_option = input("Select an option('pe', 'pn', 'q'): ").strip()
+        while input_option not in ['pe', 'pn', 'pns', 'q']:
+            input_option = input("Select an option('pe', 'pn', 'pns', 'q'): ").strip()
 
             if input_option == 'pe':
                 process_existing_places()
 
             elif input_option == 'pn':
                 post_new_places()
+
+            elif input_option == 'pns':
+                process_nearbysearch_data()
 
             elif input_option == 'q':
                 print("Exiting...")
