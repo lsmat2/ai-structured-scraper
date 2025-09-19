@@ -2,119 +2,16 @@ import requests
 import os
 import json
 import sys
-from dotenv import load_dotenv
-
 from clean_nearby_places import process_places
+from BackendClient import BackendClient
 
 # IMPROVEMENTS: 
 # - Include datetime in object to determine time since last request
 # - Add retry logic with exponential backoff for failed requests
 # - Add logging to file with timestamps
 
-load_dotenv()
-BACKEND_API_URL = os.getenv("BACKEND_API_URL")
+BackendClient = BackendClient()
 
-def _get_place_response_by_id(place_id:int) -> requests.Response:
-    """Fetch place data from backend."""
-    url = f"{BACKEND_API_URL}/api/places/{place_id}"
-
-    try:
-        response = requests.get(url, timeout=10)
-        return response
-    except requests.RequestException as e:
-        print(f"Error fetching place data: {e}")
-    except json.JSONDecodeError as e:
-        print(f"Invalid JSON response: {e}")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-
-def _get_place_id_from_bounds(name: str, latitude:float, longitude:float, box_distance:float=10.0) -> str | None:
-    """Fetch place data from backend by geographic bounds."""
-    # Params should be structured:    ?bounds=SWlat,SWlng,NElat,NElng
-    SWlat:int = latitude - box_distance
-    SWlng:int = longitude - box_distance
-    NElat:int = latitude + box_distance
-    NElng:int = longitude + box_distance
-    params_string:str = f"?bounds={SWlat},{SWlng},{NElat},{NElng}"
-    url:str = f"{BACKEND_API_URL}/api/places/{params_string}"
-
-    try:
-        response = requests.get(url, timeout=10)
-    
-    except requests.RequestException as e:
-        print(f"Error fetching place data: {e}")
-    except json.JSONDecodeError as e:
-        print(f"Invalid JSON response: {e}")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-    
-    if not response.status_code == 200:
-        return None
-    
-    places_list: list[dict] = response.json()
-    for place in places_list:
-        if place.get("latitude") == latitude and place.get("longitude") == longitude:
-            return place.get("id", None)
-        elif place.get("name", "").lower() == name.lower():
-            return place.get("id", None)
-
-    return None
-
-def _delete_place(place_id:int) -> requests.Response:
-    """Delete place data from the backend API."""
-    url = f"{BACKEND_API_URL}/api/places/{place_id}"
-
-    try:
-        response = requests.delete(url, timeout=10)
-        return response
-    except requests.RequestException as e:
-        print(f"Error deleting place data: {e}")
-    except json.JSONDecodeError as e:
-        print(f"Invalid JSON response: {e}")
-    except Exception as e:
-        print(f"\nError deleting place data: {e}")
-
-def _update_place(place_id:int, place_data:dict) -> requests.Response:
-    """Update place data in the backend API."""
-    url = f"{BACKEND_API_URL}/api/places/{place_id}"
-
-    try:
-        response = requests.put(url, json=place_data, timeout=10)
-        return response
-    except requests.RequestException as e:
-        print(f"Error updating place data: {e}")
-    except json.JSONDecodeError as e:
-        print(f"Invalid JSON response: {e}")
-    except Exception as e:
-        print(f"\nError updating place data: {e}")
-
-def _create_place(place_data:dict) -> requests.Response:
-    """Create place data in the backend API."""
-    url = f"{BACKEND_API_URL}/api/places"
-
-    try:
-        response = requests.post(url, json=place_data, timeout=10)
-        return response
-    except requests.RequestException as e:
-        print(f"Error creating place data: {e}")
-    except json.JSONDecodeError as e:
-        print(f"Invalid JSON response: {e}")
-    except Exception as e:
-        print(f"\nError creating place data: {e}")
-
-def _create_promo(place_id: int, promo_data:dict) -> requests.Response:
-    """Create promo data in the backend API."""
-    url = f"{BACKEND_API_URL}/api/places/{place_id}/promotions"
-
-    try:
-        response = requests.post(url, json=promo_data, timeout=10)
-        return response
-    except requests.RequestException as e:
-        print(f"Error creating promo data: {e}")
-    except json.JSONDecodeError as e:
-        print(f"Invalid JSON response: {e}")
-    except Exception as e:
-        print(f"\nError creating promo data: {e}")
 
 def _process_place_noninteractive(place_id: int, notFoundAction: str, internalServerErrorAction: str, successAction: str) -> None:
     """Process a single place by ID in non-interactive mode."""
@@ -157,7 +54,7 @@ def _process_place_interactive(place_id:int) -> None:
     """Main function to process a single place by ID."""
     
     try:
-        place_response = _get_place_response_by_id(place_id)
+        place_response = BackendClient.get_place_by_id(place_id)
         status_code = place_response.status_code
        
         if status_code == 404:
@@ -166,7 +63,7 @@ def _process_place_interactive(place_id:int) -> None:
         
         elif status_code == 500:
             print(f"Place ID {place_id} returning 500, deleting place...")
-            _delete_place(place_id)
+            BackendClient.delete_place(place_id)
             return
         
         elif status_code == 200:
@@ -174,12 +71,10 @@ def _process_place_interactive(place_id:int) -> None:
             print(f"Place ID {place_id} found. Current data:\n{place_response.json()}")
 
             action = ''
-            while action not in ['d', 'u', 's']:
-                action = input("Action (delete 'd', update 'u', skip 's'): ").strip().lower()
-                if action == 'u':
-                    _update_place(place_id)
-                elif action == 'd':
-                    _delete_place(place_id)
+            while action not in ['d', 's']:
+                action = input("Action (delete 'd', skip 's'): ").strip().lower()
+                if action == 'd':
+                    BackendClient.delete_place(place_id)
                 elif action == 's':
                     print(f"Skipping place ID: {place_id}")
                 else:
@@ -239,10 +134,10 @@ def _post_nearbysearch_cleaned_data(filepath:str) -> None:
     
     id_local = place_data.pop("id", None)
 
-    id_backend: str | None = _get_place_id_from_bounds(
+    id_backend: str | None = BackendClient.get_place_id_from_bounds(
         name=place_data.get("name"),
         latitude=place_data.get("latitude"), 
-        longitude=place_data.get("longitude")
+        longitude=place_data.get("longitude"),
     )
 
     if (id_local is not None) and (id_backend is not None) and (id_local != id_backend):
@@ -256,7 +151,7 @@ def _post_nearbysearch_cleaned_data(filepath:str) -> None:
     # 1) Place exists in backend by bounds, update it
     if id_backend:
         print(f"Place ID {id_backend} already exists, updating place...")
-        response = _update_place(id_backend, place_data)
+        response = BackendClient.update_place(id_backend, place_data)
         if response.status_code == 200:
             print(f"Successfully updated place ID {id_backend}\n({response.status_code}): {response.text}")
             return
@@ -266,7 +161,7 @@ def _post_nearbysearch_cleaned_data(filepath:str) -> None:
     
     # 2) Place does not exist in backend, create it
     print(f"Place does not exist, creating place...")
-    response = _create_place(place_data)
+    response = BackendClient.create_place(place_data)
     if response.status_code == 201:
         print(f"Successfully created place\n({response.status_code}): {response.text}")
         if response.json().get("id") is not None: 
@@ -296,7 +191,7 @@ def _post_ai_cleaned_data(ai_data_filepath:str) -> None:
         if not place_id:
             raise ValueError(f"Missing 'id' in placeData of file {ai_data_filepath}")
             
-        update_place_response: requests.Response = _update_place(place_id, place_data)
+        update_place_response: requests.Response = BackendClient.update_place(place_id, place_data)
         print(f"Successfully updated place ID {place_id}\n{'-'*60}\n({update_place_response.status_code}): {update_place_response.text}")
 
         promotion_list = data.get("promoData", None)
@@ -316,7 +211,7 @@ def _post_ai_cleaned_data(ai_data_filepath:str) -> None:
                     raise ValueError(f"Missing 'title', 'description' or 'hours' in promoData item in file {ai_data_filepath}")
 
                 # If all checks pass, create the promo
-                create_promo_response: requests.Response = _create_promo(place_id=place_id, promo_data=promo_data)
+                create_promo_response: requests.Response = BackendClient.create_promotion(place_id=place_id, promo_data=promo_data)
                 print(f"Successfully created promo {promo_data['title']}\n{'-'*60}\n({create_promo_response.status_code}): {create_promo_response.text}")
         
         print(f"Finished processing AI cleaned data from file {ai_data_filepath}")
@@ -332,10 +227,14 @@ def process_nearbysearch_data() ->  None:
         nearby_data_filepath = input("Enter nearby search cleaned data file path (or 'all' to specify all cleaned files in output directory: output_nearbySearch/): ").strip()
 
         if (nearby_data_filepath == 'all'):
-            for root, dirs, files in os.walk("output_nearbySearch/"):
-                for filename in files:
-                    if filename.endswith(".json"): 
-                        process_places(os.path.join(root, filename))
+            for root, dirs, _ in os.walk("output_nearbySearch/"):
+                for dir in dirs:
+                    print(f"Processing directory: {dir}")
+                    subdirectory_path = os.path.join(root, dir)
+                    for subroot, _, subfiles in os.walk(subdirectory_path):
+                        for subfilename in subfiles:
+                            if subfilename.endswith(".json"):
+                                process_places(os.path.join(subroot, subfilename))
 
         else:
             process_places(nearby_data_filepath)
