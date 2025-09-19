@@ -118,8 +118,9 @@ menu_data = [
 
 #### Notes
 - Each promotion, event, and menu item should be a distinct entry.
+- If an item has multiple time slots, represent each slot as a separate entry.
 - Events are one-time or date-bound, while promotions are recurring or ongoing.
 - If an item spans an entire day and no specific times are given, use open_hour = 0 and close_hour = 0.
 - Do not invent fields not defined in the schema. Only use the properties described above.
-- If certain information is not available, omit that field or set it to null.
+- If certain information is not available, omit that field. If hours information is not specified, assume it spans the entire day.
 - Ensure the final output is valid JSON and adheres to the schema."""
