@@ -187,7 +187,8 @@ def _save_nearby_places(places: List[Dict]) -> None:
         if place_status != "OPERATIONAL":
             print(f"Skipping place {place_data.get('displayName', {}).get('text', 'NO NAME FOUND')}: ({place_status})")
             continue
-
+        
+        # Format place data to be compatible with backend
         formatted_place_data = _format_place_data(place_data=place_data)
         if formatted_place_data.get('missing_fields') is not None:
             print(f"Place {formatted_place_data.get('name', 'NO_NAME_FOUND')} is missing required fields: {formatted_place_data['missing_fields']}")
@@ -196,23 +197,26 @@ def _save_nearby_places(places: List[Dict]) -> None:
 
         # Create filename from place name (sanitize for filesystem)
         place_name = formatted_place_data['name']
-        # Remove/replace characters that aren't filesystem-safe
         safe_filename = "".join(char for char in place_name if char.isalnum() or char in (' ', '-', '_')).rstrip()
         safe_filename = safe_filename.replace(' ', '_')
         filename = f"{safe_filename}.json"
-        filepath = os.path.join(output_dir, filename)
-        
+
+        # Create appropriate directory & subdirectories by state code
+        subdirectory = formatted_place_data.get("state_code", "unknown_state")
+        subdirectory_path = os.path.join(output_dir, subdirectory)
+        if not os.path.exists(subdirectory_path):
+            os.makedirs(subdirectory_path)
+            print(f"Created subdirectory: {subdirectory_path}")
+        filepath = os.path.join(subdirectory_path, filename)
+
+        # Save the formatted place data to a JSON file
         print(f"Saving place {i}: {place_name} to {filename}")
-        
         try:
             with open(filepath, 'w') as f:
                 json.dump(formatted_place_data, f, indent=2)
             print(f"Successfully saved: {filename}")
-            
         except Exception as e:
             print(f"Error saving place data: {e}")
-
-        input("\n Press Enter to continue...")
 
 
 def process_places(filename: str):
@@ -221,7 +225,6 @@ def process_places(filename: str):
     try:
         
         places = _get_nearby_places(filename)
-        # _post_nearby_places(places)
         _save_nearby_places(places)
 
     except FileNotFoundError:
