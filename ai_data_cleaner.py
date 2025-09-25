@@ -5,7 +5,6 @@ import json
 import sys
 import os
 import logging
-import time
 
 from dotenv import load_dotenv
 
@@ -13,7 +12,6 @@ from openai import OpenAI
 from openai.types.responses import ResponseUsage, ParsedResponse, ParsedResponseOutputMessage, ParsedResponseOutputText
 
 from typing import cast
-from geopy.geocoders import Nominatim
 
 from ai_schema_config import PlaceDataExtraction, SCHEMA_DESCRIPTION
 
@@ -113,8 +111,8 @@ class LLMCleaner:
     def call_openai_api(self, scraped_website_content: str) -> dict[str]:
         """Use OpenAI API to refine unstructured text data into structured format"""
 
+        # Call OpenAI API with unstructured text input and predefined schema instructions
         logger.info("Refining text data with OpenAI API...")
-
         try:
             response: ParsedResponse[PlaceDataExtraction] = self.client.responses.parse(
                 model="gpt-4o-mini",
@@ -128,48 +126,29 @@ class LLMCleaner:
             logger.error(f"Error calling OpenAI API: {e}")
             raise
 
-        # # The parsed object is directly available here
-        # place: PlaceDataExtraction = response.output[0]
-        # logger.info(f"Refined data: {place.model_dump_json(indent=2)}")
-
-        # # Token usage (new field names)
-        # input_tokens = response.usage.input_tokens
-        # output_tokens = response.usage.output_tokens
-        # total_tokens = response.usage.total_tokens
-
-        # # Store the refined content and token usage information
-        # llm_output = {
-        #     "content": place,
-        #     "input_tokens": input_tokens,
-        #     "output_tokens": output_tokens,
-        #     "total_tokens": total_tokens,
-        # }
-
+        # Log token usage info
         usage_info: ResponseUsage = response.usage
         input_tokens = usage_info.input_tokens
         output_tokens = usage_info.output_tokens
         total_tokens = usage_info.total_tokens
-        print(f"\nToken usage - Input: {input_tokens}, Output: {output_tokens}, Total: {total_tokens}\n")
+        logger.info(f"Token usage - Input: {input_tokens}, Output: {output_tokens}, Total: {total_tokens}")
 
+        # Extract structured data output from response
         response_message: ParsedResponseOutputMessage[PlaceDataExtraction] = response.output[0]
-        # print(f"\nResponse message (response.output[0]): {response_message}\n")
-
         response_content: ParsedResponseOutputText[PlaceDataExtraction] = cast(
             ParsedResponseOutputText[PlaceDataExtraction], response_message.content[0]
         )
-        # print(f"\nResponse content (response.output[0].content[0]): {response_content}\n")
-
         response_parsed: PlaceDataExtraction = response_content.parsed
-        # print(f"\nResponse parsed (response.output[0].content[0].parsed): {response_parsed}\n")
 
         return response_parsed
 
 
-    def _write_to_output_file(self, content:str, filename:str):
+    def _write_to_output_file(self, content:str, subdirectory:str, filename:str):
         """Write content to output file, with option to overwrite if file exists"""
 
         os.makedirs(self.OUTPUT_DIR, exist_ok=True) # Create directory if it doesn't exist
-        full_path = os.path.join(self.OUTPUT_DIR, filename) # Full path to the output file
+        os.makedirs(os.path.join(self.OUTPUT_DIR, subdirectory), exist_ok=True) # Create subdirectory if it doesn't exist
+        full_path = os.path.join(self.OUTPUT_DIR, subdirectory, filename) # Full path to the output file
 
         try:
             data = json.loads(content)
@@ -209,14 +188,7 @@ class LLMCleaner:
         # TODO: Store/track/log token usage info
         # TODO: Compare to existing place data
 
-        # TODO: Further separate output by state
-        geolocator = Nominatim(user_agent='geoapi')
-        location = geolocator.reverse((place_data.get("latitude"), place_data.get("longitude")), exactly_one=True)
-        if location and 'address' in location.raw and 'state' in location.raw['address']:
-            state_str = location.raw['address']['state']
-            # state_dir = os.path.join(self.OUTPUT_DIR, state.replace(" ", "_"))
-
-        self._write_to_output_file(structured_place_data_json, output_filename)
+        self._write_to_output_file(structured_place_data_json, place_data.get("state_code", "unknown_state"), output_filename)
         if verbose: logger.info(f"Finished processing {website_url}, saved as {output_filename}")
 
 
@@ -243,43 +215,19 @@ class LLMCleaner:
         except Exception as e:
             logger.error(f"Error occurred while processing place data: {e}")
 
-def test_geocoder(latitude:float, longitude:float):
-    geolocator = Nominatim(user_agent='leo_test_geocoder')
-    location = geolocator.reverse((latitude, longitude), exactly_one=True)
-    if location and 'address' in location.raw and 'state' in location.raw['address']:
-        state = location.raw['address']['state']
-        print(f"State: {state}")
-    else:
-        print("State information not found.")
-
 if __name__ == "__main__":
 
-    # if len(sys.argv) != 2:
-    #     print("Usage: python ai_data_cleaner.py <filepath_to_placedata>")
-    #     sys.exit(1)
+    if len(sys.argv) != 2:
+        print("Usage: python ai_data_cleaner.py <filepath_to_placedata>")
+        sys.exit(1)
 
-    # filepath = sys.argv[1]
-    print ("Test: Illinois")
-    latitude, longitude = 41.931444,-87.648686
-    test_geocoder(latitude, longitude)
+    filepath = sys.argv[1]
 
-    time.sleep(2)
-    
-    print ("Test: Florida")
-    latitude, longitude = 27.940532,-82.483181
-    test_geocoder(latitude, longitude)
-
-    time.sleep(2)
-    
-    print ("Test: Idaho")
-    latitude, longitude = 45.503,114.449
-    test_geocoder(latitude, longitude)
-
-    # try:
-    #     cleaner = LLMCleaner()
-    #     cleaner.clean_place_data(filepath, verbose=True)
-    # except Exception as e:
-    #     logger.error(f"Error occurred while cleaning place data: {e}")
+    try:
+        cleaner = LLMCleaner()
+        cleaner.clean_place_data(filepath, verbose=True)
+    except Exception as e:
+        logger.error(f"Error occurred while cleaning place data: {e}")
 
     # test_urls = [
     #     "https://www.kellyspub.com/",
