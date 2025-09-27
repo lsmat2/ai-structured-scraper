@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from openai.types.responses import ResponseUsage, ParsedResponse, ParsedResponseOutputMessage, ParsedResponseOutputText
 
-from typing import cast
+from typing import Optional, cast
 
 from ai_schema_config import PlaceDataExtraction, SCHEMA_DESCRIPTION
 
@@ -142,19 +142,24 @@ class LLMCleaner:
 
         return response_parsed
 
-
-    def _write_to_output_file(self, content:str, subdirectory:str, filename:str):
+    def _write_to_output_file(self, content:str, subdirectory:Optional[str], filename:str):
         """Write content to output file, with option to overwrite if file exists"""
 
-        os.makedirs(self.OUTPUT_DIR, exist_ok=True) # Create directory if it doesn't exist
-        os.makedirs(os.path.join(self.OUTPUT_DIR, subdirectory), exist_ok=True) # Create subdirectory if it doesn't exist
-        full_path = os.path.join(self.OUTPUT_DIR, subdirectory, filename) # Full path to the output file
+        # Ensure output directory/subdirectory exists and create full path
+        os.makedirs(self.OUTPUT_DIR, exist_ok=True)
+        if subdirectory:
+            os.makedirs(os.path.join(self.OUTPUT_DIR, subdirectory), exist_ok=True)
+            full_path = os.path.join(self.OUTPUT_DIR, subdirectory, filename)
+        else:
+            full_path = os.path.join(self.OUTPUT_DIR, filename)
 
+        # Parse content to ensure valid JSON before writing
         try:
             data = json.loads(content)
         except json.JSONDecodeError:
             raise ValueError("Failed to parse content as JSON.")
 
+        # Write to output file, prompt if overwriting existing content
         if os.path.exists(full_path) and (input(f"File {filename} exists. Replace existing content? (y/n): ") == 'y'):
             with open(full_path, "w", encoding="utf-8") as f:
                 f.write(json.dumps(data, ensure_ascii=False, indent=2)+"\n")
@@ -190,7 +195,6 @@ class LLMCleaner:
 
         self._write_to_output_file(structured_place_data_json, place_data.get("state_code", "unknown_state"), output_filename)
         if verbose: logger.info(f"Finished processing {website_url}, saved as {output_filename}")
-
 
     def _get_ai_cleaned_filename(self, place_data_filepath:str) -> str:
         """Get the filename for the AI cleaned place data."""
