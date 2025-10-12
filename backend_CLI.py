@@ -10,7 +10,7 @@ from BackendClient import BackendClient
 # - Add retry logic with exponential backoff for failed requests
 # - Add logging to file with timestamps
 
-BackendClient = BackendClient()
+backendClient = BackendClient()
 
 
 def _process_place_noninteractive(place_id: int, notFoundAction: str, internalServerErrorAction: str, successAction: str) -> None:
@@ -54,7 +54,7 @@ def _process_place_interactive(place_id:int) -> None:
     """Main function to process a single place by ID."""
     
     try:
-        place_response = BackendClient.get_place_by_id(place_id)
+        place_response = backendClient.get_place_by_id(place_id)
         status_code = place_response.status_code
        
         if status_code == 404:
@@ -63,7 +63,7 @@ def _process_place_interactive(place_id:int) -> None:
         
         elif status_code == 500:
             print(f"Place ID {place_id} returning 500, deleting place...")
-            BackendClient.delete_place(place_id)
+            backendClient.delete_place(place_id)
             return
         
         elif status_code == 200:
@@ -74,7 +74,7 @@ def _process_place_interactive(place_id:int) -> None:
             while action not in ['d', 's']:
                 action = input("Action (delete 'd', skip 's'): ").strip().lower()
                 if action == 'd':
-                    BackendClient.delete_place(place_id)
+                    backendClient.delete_place(place_id)
                 elif action == 's':
                     print(f"Skipping place ID: {place_id}")
                 else:
@@ -134,7 +134,7 @@ def _post_nearbysearch_cleaned_data(filepath:str) -> None:
     
     id_local = place_data.pop("id", None)
 
-    id_backend: str | None = BackendClient.get_place_id_from_bounds(
+    id_backend: str | None = backendClient.get_place_id_from_bounds(
         name=place_data.get("name"),
         latitude=place_data.get("latitude"), 
         longitude=place_data.get("longitude"),
@@ -151,7 +151,7 @@ def _post_nearbysearch_cleaned_data(filepath:str) -> None:
     # 1) Place exists in backend by bounds, update it
     if id_backend:
         print(f"Place ID {id_backend} already exists, updating place...")
-        response = BackendClient.update_place(id_backend, place_data)
+        response = backendClient.update_place(id_backend, place_data)
         if response.status_code == 200:
             print(f"Successfully updated place ID {id_backend}\n({response.status_code}): {response.text}")
             return
@@ -161,7 +161,7 @@ def _post_nearbysearch_cleaned_data(filepath:str) -> None:
     
     # 2) Place does not exist in backend, create it
     print(f"Place does not exist, creating place...")
-    response = BackendClient.create_place(place_data)
+    response = backendClient.create_place(place_data)
     if response.status_code == 201:
         print(f"Successfully created place\n({response.status_code}): {response.text}")
         if response.json().get("id") is not None: 
@@ -191,7 +191,7 @@ def _post_ai_cleaned_data(ai_data_filepath:str) -> None:
         if not place_id:
             raise ValueError(f"Missing 'id' in placeData of file {ai_data_filepath}")
             
-        update_place_response: requests.Response = BackendClient.update_place(place_id, place_data)
+        update_place_response: requests.Response = backendClient.update_place(place_id, place_data)
         print(f"Successfully updated place ID {place_id}\n{'-'*60}\n({update_place_response.status_code}): {update_place_response.text}")
 
         promotion_list = data.get("promoData", None)
@@ -211,7 +211,7 @@ def _post_ai_cleaned_data(ai_data_filepath:str) -> None:
                     raise ValueError(f"Missing 'title', 'description' or 'hours' in promoData item in file {ai_data_filepath}")
 
                 # If all checks pass, create the promo
-                create_promo_response: requests.Response = BackendClient.create_promotion(place_id=place_id, promo_data=promo_data)
+                create_promo_response: requests.Response = backendClient.create_promotion(place_id=place_id, promo_data=promo_data)
                 print(f"Successfully created promo {promo_data['title']}\n{'-'*60}\n({create_promo_response.status_code}): {create_promo_response.text}")
         
         print(f"Finished processing AI cleaned data from file {ai_data_filepath}")
