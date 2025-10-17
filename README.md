@@ -72,7 +72,7 @@ python clean_nearby_places.py output_nearbySearch/41.8781--87.6298.json
 
 This processes raw data and saves cleaned data to `output_nearbySearch_cleaned/` directory.
 
-### 3. AI-powered web scraping and data extraction
+### 3. Web scraping and AI-powered data cleaning
 
 ```bash
 python ai_data_cleaner.py <path_to_place_data_file>
@@ -83,7 +83,7 @@ Example:
 python ai_data_cleaner.py output_nearbySearch_cleaned/IL/some_place.json
 ```
 
-This scrapes the place's website and uses OpenAI to extract structured data, saving to `output_nearbySearch_ai_cleaned/` directory.
+This scrapes the place's website and associated sublinks and uses OpenAI (only, for now) to extract structured data, saving to `output_nearbySearch_ai_cleaned/` directory.
 
 ### 4. Backend operations via interactive CLI
 
@@ -103,16 +103,16 @@ Interactive menu with options:
 from BackendClient import BackendClient
 
 client = BackendClient()
-response = client.get_place_by_id(123)
+response = client.get_place_by_id(<place_id>)
 client.create_place(place_data)
-client.update_place(123, updated_data)
+client.update_place(<place_id>, updated_data)
 ```
 
 ## Project Structure & Data Flow
 
 ```
 Raw Google Places Data → Cleaned/Normalized Data → AI-Enhanced Data → Backend Storage
-     (fetch_nearby_places.py)   (clean_nearby_places.py)   (ai_data_cleaner.py)   (backend_CLI.py)
+(fetch_nearby_places.py)   (clean_nearby_places.py)   (ai_data_cleaner.py)   (backend_CLI.py)
 ```
 
 ### Output Directories
