@@ -189,9 +189,13 @@ class LLMCleaner:
         structured_place_data_dict["longitude"] = place_data.get("longitude")
         structured_place_data_json = json.dumps(structured_place_data_dict, ensure_ascii=False, indent=2)
 
+        # Compare to existing place data
+        for key in structured_place_data_dict:
+            if key in place_data and structured_place_data_dict[key] != place_data[key]:
+                logger.info(f"Field '{key}' differs from original data. Original: {place_data[key]}, New: {structured_place_data_dict[key]}")
+
         # if verbose: logger.info(f"\n------------\nTOKEN INFO\nPrompt: {llm_output.get('prompt_tokens', 'ERR')}\nCompletion: {llm_output.get('completion_tokens', 'ERR')}\nTotal: {llm_output.get('total_tokens', 'ERR')}\n------------\n")
         # TODO: Store/track/log token usage info
-        # TODO: Compare to existing place data
 
         self._write_to_output_file(structured_place_data_json, place_data.get("state_code", "unknown_state"), output_filename)
         if verbose: logger.info(f"Finished processing {website_url}, saved as {output_filename}")
