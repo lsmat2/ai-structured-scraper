@@ -190,8 +190,8 @@ class LLMCleaner:
         structured_place_data_json = json.dumps(structured_place_data_dict, ensure_ascii=False, indent=2)
 
         # Compare to existing place data
-        for key in structured_place_data_dict:
-            if key in place_data and structured_place_data_dict[key] != place_data[key]:
+        for key in place_data:
+            if key in structured_place_data_dict and place_data[key] != structured_place_data_dict[key]:
                 logger.info(f"Field '{key}' differs from original data. Original: {place_data[key]}, New: {structured_place_data_dict[key]}")
 
         # if verbose: logger.info(f"\n------------\nTOKEN INFO\nPrompt: {llm_output.get('prompt_tokens', 'ERR')}\nCompletion: {llm_output.get('completion_tokens', 'ERR')}\nTotal: {llm_output.get('total_tokens', 'ERR')}\n------------\n")
