@@ -194,9 +194,6 @@ class LLMCleaner:
             if key in structured_place_data_dict and place_data[key] != structured_place_data_dict[key]:
                 logger.info(f"Field '{key}' differs from original data. Original: {place_data[key]}, New: {structured_place_data_dict[key]}")
 
-        # if verbose: logger.info(f"\n------------\nTOKEN INFO\nPrompt: {llm_output.get('prompt_tokens', 'ERR')}\nCompletion: {llm_output.get('completion_tokens', 'ERR')}\nTotal: {llm_output.get('total_tokens', 'ERR')}\n------------\n")
-        # TODO: Store/track/log token usage info
-
         self._write_to_output_file(structured_place_data_json, place_data.get("state_code", "unknown_state"), output_filename)
         if verbose: logger.info(f"Finished processing {website_url}, saved as {output_filename}")
 
