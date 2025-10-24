@@ -70,8 +70,8 @@ class PlaceDataExtraction(BaseModel):
 SCHEMA_DESCRIPTION = """You are an expert at structured data extraction. You will be given unstructured
 text from a business's website and should convert it into the provided schema.
 
-Focus on identifying business hours, contact information, descriptions, events,
-promotions, menu items, amenities, cuisines, and secondary types.
+Focus primarily on identifying individual promotions, yet also business hours, contact information, 
+descriptions, events, menu items, amenities, cuisines, and secondary types.
 
 #### Hours
 Represent hours using integers for time fields:
