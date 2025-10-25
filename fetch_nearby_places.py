@@ -159,8 +159,8 @@ def main():
             latitude=lat_rounded, 
             longitude=lon_rounded, 
             radius=5000.0, # 0.0 <= radius <= 50000.0 (METERS)
-            # included_types=INCLUDED_TYPES_FOOD_AND_DRINK, 
-            included_types=['bar', 'pub'],
+            included_types=INCLUDED_TYPES_FOOD_AND_DRINK, 
+            # included_types=['bar', 'pub'],
             max_results=20, # 1 <= max_results <= 20 
             field_mask=FIELD_MASK,
         )
