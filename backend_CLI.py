@@ -6,12 +6,12 @@ from typing import Any, Dict, List, cast
 from clean_nearby_places import process_places
 from BackendClient import BackendClient
 
-# IMPROVEMENTS: 
+# IMPROVEMENTS:
 # - Include datetime in object to determine time since last request
 # - Add retry logic with exponential backoff for failed requests
 # - Add logging to file with timestamps
 
-backendClient = BackendClient()
+backendClient: BackendClient = BackendClient()
 
 
 def _process_place_noninteractive(place_id: int, notFoundAction: str, internalServerErrorAction: str, successAction: str) -> None:
@@ -92,8 +92,8 @@ def process_existing_places() -> None:
         is_interactive = bool(input("Interactive? (y/n): ") == 'y')
 
         if (is_interactive):
-            for id in range(start_id, end_id):
-                _process_place_interactive(place_id=id)
+            for place_id in range(start_id, end_id):
+                _process_place_interactive(place_id=place_id)
 
         else:
             not_found_action = input("Action on 404 Not Found? (d=delete, s=skip, u=update): ").strip().lower()
@@ -108,8 +108,8 @@ def process_existing_places() -> None:
             while success_action not in ['d', 's', 'u']:
                 success_action = input("Invalid action. Please enter 'd', 's', or 'u': ").strip().lower()
 
-            for id in range(start_id, end_id):
-                _process_place_noninteractive(place_id=id, notFoundAction=not_found_action, internalServerErrorAction=internal_server_error_action, successAction=success_action)
+            for place_id in range(start_id, end_id):
+                _process_place_noninteractive(place_id=place_id, notFoundAction=not_found_action, internalServerErrorAction=internal_server_error_action, successAction=success_action)
 
     except KeyboardInterrupt:
         raise KeyboardInterrupt
@@ -293,9 +293,9 @@ def post_new_places() -> None:
     except Exception as e:
         print(f"An error occurred while processing new places: {e}")
 
-def main():
+def main() -> None:
     """Main function to run the place data posting script."""
-    
+
     if (len(sys.argv) != 1):
         print("Usage: python backend_CLI.py")
         sys.exit(1)
