@@ -48,11 +48,11 @@ class BackendClient:
         response = requests.get(url, timeout=10)
         return response
 
-    def get_place_id_from_bounds(self, name: str, latitude: float, longitude: float) -> Optional[str]:
+    def get_place_id_from_bounds(self, name: str, latitude: float, longitude: float) -> Optional[int]:
         """Fetch place data from backend by geographic bounds.
 
         Returns:
-            Place ID if found, None if not found
+            Place ID (integer) if found, None if not found
 
         Raises:
             requests.RequestException: If the request fails

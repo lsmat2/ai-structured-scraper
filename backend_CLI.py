@@ -2,6 +2,7 @@ import requests
 import os
 import json
 import sys
+from typing import Any, Dict, List, cast
 from clean_nearby_places import process_places
 from BackendClient import BackendClient
 
@@ -122,7 +123,7 @@ def _post_nearbysearch_cleaned_data(filepath:str) -> None:
 
     try:
         with open(filepath, "r", encoding="utf-8") as f:
-            place_data:dict = json.load(f)
+            place_data: Dict[str, Any] = json.load(f)
             if not place_data: raise ValueError("No data found in file")
     except FileNotFoundError:
         raise FileNotFoundError(f"File not found: {filepath}")
@@ -130,14 +131,14 @@ def _post_nearbysearch_cleaned_data(filepath:str) -> None:
         raise ValueError(f"Error decoding JSON from file {filepath}: {e}")
     except Exception as e:
         raise ValueError(f"Error getting data from file {filepath}: {e}")
-    
-    
+
+
     id_local = place_data.pop("id", None)
 
-    id_backend: str | None = backendClient.get_place_id_from_bounds(
-        name=place_data.get("name"),
-        latitude=place_data.get("latitude"), 
-        longitude=place_data.get("longitude"),
+    id_backend: int | None = backendClient.get_place_id_from_bounds(
+        name=place_data.get("name", ""),
+        latitude=place_data.get("latitude", 0.0),
+        longitude=place_data.get("longitude", 0.0),
     )
 
     if (id_local is not None) and (id_backend is not None) and (id_local != id_backend):
@@ -179,32 +180,36 @@ def _post_ai_cleaned_data(ai_data_filepath:str) -> None:
     try:
 
         with open(ai_data_filepath, "r", encoding="utf-8") as f:
-            data:dict = json.load(f)
-            if not data: 
+            data: Dict[str, Any] = json.load(f)
+            if not data:
                 raise ValueError(f"No data found in file {ai_data_filepath}")
-        
-        place_data: dict = data.get("placeData")
-        if not place_data:
-            raise ValueError(f"Missing 'placeData' in file {ai_data_filepath}")
-        
-        place_id: str = place_data.pop("id", None)
+
+        place_data_raw = data.get("placeData")
+        if not place_data_raw or not isinstance(place_data_raw, dict):
+            raise ValueError(f"Missing or invalid 'placeData' in file {ai_data_filepath}")
+        place_data: Dict[str, Any] = cast(Dict[str, Any], place_data_raw)
+
+        place_id: int | None = place_data.pop("id", None)
         if not place_id:
             raise ValueError(f"Missing 'id' in placeData of file {ai_data_filepath}")
             
         update_place_response: requests.Response = backendClient.update_place(place_id, place_data)
         print(f"Successfully updated place ID {place_id}\n{'-'*60}\n({update_place_response.status_code}): {update_place_response.text}")
 
-        promotion_list = data.get("promoData", None)
-        if promotion_list is None:
+        promotion_list_raw = data.get("promoData", None)
+        if promotion_list_raw is None:
             print(f"No 'promoData' found in file {ai_data_filepath}")
 
         else:
-            if not isinstance(promotion_list, list):
+            if not isinstance(promotion_list_raw, list):
                 raise ValueError(f"'promoData' should be a list of dictionaries in file {ai_data_filepath}")
 
-            for promo_data in promotion_list:
-                if not isinstance(promo_data, dict):
+            promotion_list: List[Any] = cast(List[Any], promotion_list_raw)
+            for promo_item in promotion_list:
+                if not isinstance(promo_item, dict):
                     raise ValueError(f"Each item in 'promoData' should be a dictionary in file {ai_data_filepath}")
+
+                promo_data: Dict[str, Any] = cast(Dict[str, Any], promo_item)
 
                 # Validate required fields in each promo dictionary
                 if "title" not in promo_data or "description" not in promo_data or "hours" not in promo_data:
@@ -258,9 +263,9 @@ def post_new_places() -> None:
                 nearby_data_filepath = input("Enter nearby search cleaned data file path (or 'all' to specify all cleaned files in output directory: output_nearbySearch_cleaned/): ").strip()
 
                 if (nearby_data_filepath == 'all'):
-                    for root, dirs, files in os.walk("output_nearbySearch_cleaned/"):
+                    for root, _, files in os.walk("output_nearbySearch_cleaned/"):
                         for filename in files:
-                            if filename.endswith(".json"): 
+                            if filename.endswith(".json"):
                                 _post_nearbysearch_cleaned_data(os.path.join(root, filename))
 
                 else:
@@ -270,7 +275,7 @@ def post_new_places() -> None:
                 ai_data_filepath = input("Enter AI cleaned data file path (or 'all' to specify all AI cleaned files in output directory: output_nearbySearch_ai_cleaned/): ").strip()
 
                 if (ai_data_filepath == 'all'):
-                    for root, dirs, files in os.walk("output_nearbySearch_ai_cleaned/"):
+                    for root, _, files in os.walk("output_nearbySearch_ai_cleaned/"):
                         for filename in files:
                             if filename.endswith(".json"):
                                 _post_ai_cleaned_data(os.path.join(root, filename))
