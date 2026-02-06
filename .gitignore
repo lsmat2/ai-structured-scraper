@@ -15,6 +15,3 @@ output_nearbySearch_ai_cleaned/
 .DS_Store
 .env
 CLAUDE.md
-
-place_scraper_client_presentation.html
-place_scraper_documentation.html
